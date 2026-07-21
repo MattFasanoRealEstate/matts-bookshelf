@@ -1,7 +1,5 @@
 # Matt's Bookshelf
 
-*(project folder and deployed URL are still `founder-bookshelf` — see Notes below)*
-
 Matt's personal reading shelf — everything he's actually read, searchable by
 genre with buy links. Zero-dependency static site: no build step, no backend,
 no API keys.
@@ -43,7 +41,7 @@ no API keys.
 Any static server works, e.g.:
 
 ```sh
-python3 -m http.server 5199 -d "/Users/Matt/Desktop/founder-bookshelf"
+python3 -m http.server 5199 -d "/Users/Matt/Desktop/matts-bookshelf"
 ```
 
 then open http://localhost:5199. (`index.html` loads `data.js?v=2` /
@@ -58,14 +56,15 @@ or GitHub Pages work identically.
 
 ## Notes
 
-- Originally called "The Founder's Bookshelf" and included a curated 36-book
-  "founder canon" (Zero to One, High Output Management, etc.) ranked by
-  editorial "mentions" — both removed 2026-07 in favor of just Matt's real
-  shelf under the name "Matt's Bookshelf," mirroring how
-  [Heather's Bookshelf](../heathers-bookshelf) works: sorted by his own
-  ratings, no artificial ranking. The folder, GitHub repo, and Vercel project
-  are still named `founder-bookshelf` (renaming those would change the live
-  URL, so left as-is unless asked).
+- Originally called "The Founder's Bookshelf" (folder, repo, and deployed URL:
+  `founder-bookshelf`) and included a curated 36-book "founder canon" (Zero to
+  One, High Output Management, etc.) ranked by editorial "mentions" — both
+  dropped 2026-07 in favor of just Matt's real shelf under the name "Matt's
+  Bookshelf," mirroring how [Heather's Bookshelf](../heathers-bookshelf)
+  works: sorted by his own ratings, no artificial ranking. The folder, GitHub
+  repo (`MattFasanoRealEstate/matts-bookshelf`), and Vercel project were all
+  renamed to match; `founder-bookshelf.vercel.app` now 308-redirects to
+  `matts-bookshelf.vercel.app`.
 - Covers and metadata come from [Open Library](https://openlibrary.org) (free, no key).
 - Books added via the photo feature live in each visitor's browser only; the
   list in `data.js` is what everyone sees.
