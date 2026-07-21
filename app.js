@@ -1,4 +1,4 @@
-/* The Founder's Bookshelf — zero-dependency static app.
+/* Matt's Bookshelf — zero-dependency static app.
    Books you add are stored in localStorage; covers/metadata come from Open Library;
    photo identification runs on-device via Tesseract.js (loaded from CDN on demand). */
 

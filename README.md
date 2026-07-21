@@ -1,4 +1,6 @@
-# The Founder's Bookshelf
+# Matt's Bookshelf
+
+*(project folder and deployed URL are still `founder-bookshelf` — see Notes below)*
 
 Matt's personal reading shelf — everything he's actually read, searchable by
 genre with buy links. Zero-dependency static site: no build step, no backend,
@@ -56,11 +58,14 @@ or GitHub Pages work identically.
 
 ## Notes
 
-- Originally included a curated 36-book "founder canon" (Zero to One, High
-  Output Management, etc.) ranked by editorial "mentions" — removed 2026-07 in
-  favor of just Matt's real shelf, mirroring how
+- Originally called "The Founder's Bookshelf" and included a curated 36-book
+  "founder canon" (Zero to One, High Output Management, etc.) ranked by
+  editorial "mentions" — both removed 2026-07 in favor of just Matt's real
+  shelf under the name "Matt's Bookshelf," mirroring how
   [Heather's Bookshelf](../heathers-bookshelf) works: sorted by his own
-  ratings, no artificial ranking.
+  ratings, no artificial ranking. The folder, GitHub repo, and Vercel project
+  are still named `founder-bookshelf` (renaming those would change the live
+  URL, so left as-is unless asked).
 - Covers and metadata come from [Open Library](https://openlibrary.org) (free, no key).
 - Books added via the photo feature live in each visitor's browser only; the
   list in `data.js` is what everyone sees.
