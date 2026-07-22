@@ -26,7 +26,6 @@ let genreFilter = ''
 let sortKey = 'rating'
 let tag = localStorage.getItem(TAG_KEY) ?? ''
 let viewMode = localStorage.getItem(VIEW_KEY) === 'shelf' ? 'shelf' : 'grid'
-let highlightId = null // book id to pop-in animate on the next shelf render
 
 const shelfPool = () => [...customBooks, ...MY_BOOKS, ...(typeof TO_READ_BOOKS !== 'undefined' ? TO_READ_BOOKS : [])]
 // Grid View shows read/reading books — including anything promoted out of To Be
@@ -190,9 +189,8 @@ function renderShelf() {
   $('shelf-reading-row').innerHTML = reading
     .map((b) => {
       const src = coverUrl(b, 'M')
-      const cls = b.id === highlightId ? ' just-moved' : ''
       return `
-      <button class="reading-book${cls}" data-id="${esc(b.id)}">
+      <button class="reading-book" data-id="${esc(b.id)}">
         <span class="reading-cover">
           ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(b.title)}" loading="lazy"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />` : ''}
@@ -217,7 +215,7 @@ function renderShelf() {
       <div class="shelf-row">
         <span class="shelf-row-label">${esc(g)} · ${rowBooks.length}</span>
         <div class="shelf-row-books">
-          ${rowBooks.map((b) => shelfBookHtml(b, b.id === highlightId ? 'just-moved' : '')).join('')}
+          ${rowBooks.map((b) => shelfBookHtml(b)).join('')}
         </div>
       </div>`
     })
@@ -225,19 +223,85 @@ function renderShelf() {
 
   $('shelf-tbr-row').innerHTML = toRead
     .sort((a, b) => a.title.localeCompare(b.title))
-    .map((b) => shelfBookHtml(b, b.id === highlightId ? 'just-moved' : ''))
+    .map((b) => shelfBookHtml(b))
     .join('')
 
   $('empty-msg').hidden = books.length > 0
-  highlightId = null
 }
 
 function setStatusOverride(id, status) {
   statusOverrides[id] = status
   saveStatusOverrides()
-  highlightId = id
   closeDetail()
+  if (viewMode === 'shelf') animateShelfMove(id)
+  else render()
+}
+
+// ---------- shelf animations (FLIP: capture old spot, re-render, fly a clone) ----------
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+function coverRectOf(el) {
+  const cover = el.querySelector('.shelf-cover, .reading-cover')
+  return cover ? cover.getBoundingClientRect() : null
+}
+
+function makeGhost(rect, imgSrc, title) {
+  const ghost = document.createElement('div')
+  ghost.className = 'fly-ghost'
+  ghost.style.left = `${rect.left}px`
+  ghost.style.top = `${rect.top}px`
+  ghost.style.width = `${rect.width}px`
+  ghost.style.height = `${rect.height}px`
+  if (imgSrc) {
+    const img = document.createElement('img')
+    img.src = imgSrc
+    ghost.appendChild(img)
+  } else {
+    ghost.classList.add('no-cover')
+    ghost.textContent = title
+  }
+  document.body.appendChild(ghost)
+  return ghost
+}
+
+function flyGhost(ghost, toRect, onDone) {
+  const from = ghost.getBoundingClientRect()
+  const dx = toRect.left - from.left
+  const dy = toRect.top - from.top
+  requestAnimationFrame(() => {
+    ghost.style.transform = `translate(${dx}px, ${dy}px) scale(${toRect.width / from.width}, ${toRect.height / from.height})`
+  })
+  let done = false
+  const finish = () => { if (done) return; done = true; ghost.remove(); onDone?.() }
+  ghost.addEventListener('transitionend', finish, { once: true })
+  setTimeout(finish, 800) // safety net: zero-distance moves never fire transitionend
+}
+
+function inViewport(el) {
+  const r = el.getBoundingClientRect()
+  return r.bottom > 0 && r.top < window.innerHeight
+}
+
+function animateShelfMove(id) {
+  const sel = `#shelf-view [data-id="${CSS.escape(id)}"]`
+  const oldEl = document.querySelector(sel)
+  const oldRect = oldEl && coverRectOf(oldEl)
+  const imgSrc = oldEl?.querySelector('img')?.src ?? null
   render()
+  const newEl = document.querySelector(sel)
+  if (!newEl) return
+  const newRect = coverRectOf(newEl)
+  if (REDUCED_MOTION || !oldRect || !newRect) {
+    newEl.classList.add('just-moved')
+    return
+  }
+  newEl.style.visibility = 'hidden'
+  const ghost = makeGhost(oldRect, imgSrc, findShelfBook(id)?.title ?? '')
+  flyGhost(ghost, newRect, () => {
+    newEl.style.visibility = ''
+    newEl.classList.add('just-moved')
+    if (!inViewport(newEl)) newEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
 }
 
 // ---------- Book detail modal ("opening" a shelved book) ----------
@@ -288,7 +352,9 @@ function detailBodyHtml(book) {
 
 let openDetailId = null
 
-function openDetail(id) {
+// Opening a book. With a `sourceEl` (the clicked shelf book) the cover flies
+// off the shelf into the modal; without one, the panel swings open like a cover.
+function openDetail(id, sourceEl = null) {
   const book = findShelfBook(id)
   if (!book) return
   openDetailId = id
@@ -296,9 +362,20 @@ function openDetail(id) {
   $('detail-body').innerHTML = detailBodyHtml(book)
   $('detail-modal').hidden = false
   const panel = $('detail-panel')
-  panel.classList.remove('opening')
+  panel.classList.remove('opening', 'fade-in')
   void panel.offsetWidth // restart the animation each time
-  panel.classList.add('opening')
+
+  const srcRect = sourceEl && !REDUCED_MOTION ? coverRectOf(sourceEl) : null
+  const imgSrc = sourceEl?.querySelector('img')?.src ?? null
+  const target = $('detail-body').querySelector('.detail-cover')
+  if (srcRect && imgSrc && target) {
+    panel.classList.add('fade-in')
+    target.classList.add('cover-incoming')
+    const ghost = makeGhost(srcRect, imgSrc, book.title)
+    flyGhost(ghost, target.getBoundingClientRect(), () => target.classList.remove('cover-incoming'))
+  } else {
+    panel.classList.add('opening')
+  }
 }
 function closeDetail() { $('detail-modal').hidden = true; openDetailId = null }
 
@@ -308,7 +385,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetai
 
 $('shelf-view').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-id]')
-  if (btn) openDetail(btn.dataset.id)
+  if (btn) openDetail(btn.dataset.id, btn)
 })
 
 $('detail-body').addEventListener('click', (e) => {
@@ -349,6 +426,8 @@ $('grid').addEventListener('click', (e) => {
   if (book && confirm(`Remove “${book.title}” from your shelf?`)) {
     customBooks = customBooks.filter((b) => b.id !== book.id)
     saveCustomBooks(customBooks)
+    delete statusOverrides[book.id]
+    saveStatusOverrides()
     renderGenreOptions()
     render()
   }
@@ -453,7 +532,9 @@ $('import-input').addEventListener('change', async (e) => {
 })
 
 $('export-btn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(allBooks(), null, 2)], { type: 'application/json' })
+  // full library — read, reading, and TBR — with each book's effective shelf status
+  const data = shelfPool().map((b) => ({ ...b, status: bookStatus(b) }))
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
