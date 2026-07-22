@@ -10,7 +10,7 @@ no API keys.
 |---|---|
 | `index.html` | Page structure, including the add-a-book modal |
 | `styles.css` | All styling (dark amber "library" theme) |
-| `data.js` | The library (`MY_BOOKS`) — 51 books built from Matt's real Goodreads export. Edit this file to add/change books permanently |
+| `data.js` | The library: `MY_BOOKS` (51 read/reading books) + `TO_READ_BOOKS` (44 to-read books), both built from Matt's real Goodreads exports. Edit this file to add/change books permanently |
 | `app.js` | All logic: search/sort/filter, buy links, photo OCR, Open Library lookups, localStorage |
 
 ## Features
@@ -35,6 +35,24 @@ no API keys.
   (Matt's real Goodreads ratings).
 - **Export library** downloads the full list (`my-bookshelf.json`). To make
   books you added permanent for all visitors, paste them into `data.js`.
+- **🗄️ Shelf View** — a visual bookshelf alternative to the grid, toggled via
+  the header button (persists per-browser). Three zones: **Currently
+  reading** (books pulled forward, spine lit up in accent orange), **the
+  bookcase** (finished books shelved by genre, on a wood-grain shelf ledge),
+  and **to be read** (the 44 to-read titles pulled from Matt's Goodreads
+  to-read shelf, shown desaturated until started). Clicking any book "opens"
+  it — a `rotateY` flip reveals the detail card (cover, genre, rating,
+  summary, buy links) plus a status control:
+  - a to-read book gets **📖 Start reading** → moves it to Currently Reading
+  - a currently-reading book gets **✓ Mark finished** (→ shelved by genre) or
+    **↩ Back to TBR**
+  - a finished book gets **↺ Reading again** (in case of a reread)
+
+  Status changes are stored per-browser (`bookshelf.statusOverrides.v1`) as an
+  override on top of the base data in `data.js` — they don't edit the file
+  itself, so a re-import or a fresh browser reverts to what `data.js` says.
+  Search and the genre filter apply to Shelf View too; the sort dropdown is
+  grid-only (shelves have their own fixed organization).
 
 ## Run locally
 
@@ -44,8 +62,8 @@ Any static server works, e.g.:
 python3 -m http.server 5199 -d "/Users/Matt/Desktop/matts-bookshelf"
 ```
 
-then open http://localhost:5199. (`index.html` loads `data.js?v=2` /
-`app.js?v=2` — bump that version query if you edit either file and a stale
+then open http://localhost:5199. (`index.html` loads `data.js?v=3` /
+`app.js?v=3` — bump that version query if you edit either file and a stale
 cached copy won't clear.)
 
 ## Deploy (same as Nana's Recipes / Heather's Bookshelf)

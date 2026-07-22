@@ -5,20 +5,41 @@
 // ---------- persistence ----------
 const BOOKS_KEY = 'bookshelf.customBooks.v1'
 const TAG_KEY = 'bookshelf.amazonTag.v1'
+const STATUS_KEY = 'bookshelf.statusOverrides.v1'
+const VIEW_KEY = 'bookshelf.viewMode.v1'
 
 function loadCustomBooks() {
   try { return JSON.parse(localStorage.getItem(BOOKS_KEY)) ?? [] } catch { return [] }
 }
 const saveCustomBooks = (books) => localStorage.setItem(BOOKS_KEY, JSON.stringify(books))
 
+function loadStatusOverrides() {
+  try { return JSON.parse(localStorage.getItem(STATUS_KEY)) ?? {} } catch { return {} }
+}
+const saveStatusOverrides = () => localStorage.setItem(STATUS_KEY, JSON.stringify(statusOverrides))
+
 // ---------- state ----------
 let customBooks = loadCustomBooks()
+let statusOverrides = loadStatusOverrides() // { [bookId]: 'to-read' | 'reading' | 'read' }
 let query = ''
 let genreFilter = ''
 let sortKey = 'rating'
 let tag = localStorage.getItem(TAG_KEY) ?? ''
+let viewMode = localStorage.getItem(VIEW_KEY) === 'shelf' ? 'shelf' : 'grid'
+let highlightId = null // book id to pop-in animate on the next shelf render
 
 const allBooks = () => [...customBooks, ...MY_BOOKS]
+const shelfPool = () => [...customBooks, ...MY_BOOKS, ...(typeof TO_READ_BOOKS !== 'undefined' ? TO_READ_BOOKS : [])]
+
+// A book's shelf status: an explicit override always wins (set by the Shelf View
+// "start reading" / "mark finished" controls); otherwise it's derived from the data.
+function bookStatus(book) {
+  const override = statusOverrides[book.id]
+  if (override) return override
+  if (book.reading) return 'reading'
+  if (book.toRead) return 'to-read'
+  return 'read'
+}
 
 // ---------- link + cover helpers ----------
 function coverUrl(book, size = 'L') {
@@ -69,7 +90,8 @@ function visibleBooks() {
 }
 
 function allGenres() {
-  return [...new Set([...GENRES, ...customBooks.map((b) => b.genre)])].sort()
+  const pool = viewMode === 'shelf' ? shelfPool() : allBooks()
+  return [...new Set(pool.map((b) => b.genre))].sort()
 }
 
 function cardHtml(book) {
@@ -115,11 +137,194 @@ function renderGenreOptions() {
 }
 
 function render() {
+  if (viewMode === 'shelf') { renderShelf(); return }
   const books = visibleBooks()
   $('book-count').textContent = allBooks().length
   $('grid').innerHTML = books.map((b) => cardHtml(b)).join('')
   $('empty-msg').hidden = books.length > 0
 }
+
+// ---------- Shelf View ----------
+function shelfVisibleBooks() {
+  const q = query.trim().toLowerCase()
+  return shelfPool().filter(
+    (b) =>
+      (!genreFilter || b.genre === genreFilter) &&
+      (!q ||
+        b.title.toLowerCase().includes(q) ||
+        b.author.toLowerCase().includes(q) ||
+        b.genre.toLowerCase().includes(q)),
+  )
+}
+
+function shelfBookHtml(book, extraClass = '') {
+  const src = coverUrl(book, 'M')
+  return `
+  <button class="shelf-book ${extraClass}" data-id="${esc(book.id)}">
+    <span class="shelf-cover">
+      ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(book.title)}" loading="lazy"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />` : ''}
+      <span class="shelf-cover-fallback" style="${src ? 'display:none' : 'display:flex'}">${esc(book.title)}</span>
+    </span>
+    <span class="shelf-book-title">${esc(book.title)}</span>
+  </button>`
+}
+
+function renderShelf() {
+  const books = shelfVisibleBooks()
+  $('book-count').textContent = shelfPool().length
+
+  const reading = books.filter((b) => bookStatus(b) === 'reading')
+  const read = books.filter((b) => bookStatus(b) === 'read')
+  const toRead = books.filter((b) => bookStatus(b) === 'to-read')
+
+  $('shelf-reading-row').innerHTML = reading
+    .map((b) => {
+      const src = coverUrl(b, 'M')
+      const cls = b.id === highlightId ? ' just-moved' : ''
+      return `
+      <button class="reading-book${cls}" data-id="${esc(b.id)}">
+        <span class="reading-cover">
+          ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(b.title)}" loading="lazy" />` : ''}
+        </span>
+        <span class="reading-title">${esc(b.title)}</span>
+        <span class="reading-author">${esc(b.author)}</span>
+      </button>`
+    })
+    .join('')
+
+  const byGenre = new Map()
+  for (const b of read) {
+    if (!byGenre.has(b.genre)) byGenre.set(b.genre, [])
+    byGenre.get(b.genre).push(b)
+  }
+  const genresInOrder = [...byGenre.keys()].sort()
+  $('shelf-case-rows').innerHTML = genresInOrder
+    .map((g) => {
+      const rowBooks = byGenre.get(g).sort((a, b) => a.title.localeCompare(b.title))
+      return `
+      <div class="shelf-row">
+        <span class="shelf-row-label">${esc(g)} · ${rowBooks.length}</span>
+        <div class="shelf-row-books">
+          ${rowBooks.map((b) => shelfBookHtml(b, b.id === highlightId ? 'just-moved' : '')).join('')}
+        </div>
+      </div>`
+    })
+    .join('')
+
+  $('shelf-tbr-row').innerHTML = toRead
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .map((b) => shelfBookHtml(b, b.id === highlightId ? 'just-moved' : ''))
+    .join('')
+
+  $('empty-msg').hidden = books.length > 0
+  highlightId = null
+}
+
+function setStatusOverride(id, status) {
+  statusOverrides[id] = status
+  saveStatusOverrides()
+  highlightId = id
+  closeDetail()
+  render()
+}
+
+// ---------- Book detail modal ("opening" a shelved book) ----------
+function findShelfBook(id) {
+  return shelfPool().find((b) => b.id === id)
+}
+
+function detailBodyHtml(book) {
+  const src = coverUrl(book)
+  const status = bookStatus(book)
+  const statusButtons = {
+    'to-read': `<button class="status-btn primary" data-action="start-reading">📖 Start reading</button>`,
+    reading: `<button class="status-btn primary" data-action="mark-finished">✓ Mark finished</button>
+              <button class="status-btn ghost" data-action="back-to-tbr">↩ Back to TBR</button>`,
+    read: `<button class="status-btn ghost" data-action="back-to-reading">↺ Reading again</button>`,
+  }[status]
+  const statusLabel = {
+    'to-read': '<span class="read-chip">📚 To be read</span>',
+    reading: '<span class="read-chip">📖 Reading now</span>',
+    read: book.yearRead ? `<span class="read-chip">Read ${book.yearRead}</span>` : '',
+  }[status]
+
+  return `
+    <div class="detail-layout">
+      <div class="detail-cover">
+        ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(book.title)}"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />` : ''}
+        <span class="detail-cover-fallback" style="${src ? 'display:none' : 'display:flex'}">${esc(book.title)}</span>
+      </div>
+      <div class="detail-info">
+        <span class="chip-group">
+          <span class="genre-chip">${esc(book.genre)}</span>
+          ${statusLabel}
+        </span>
+        ${book.rating ? `<span class="stars" title="Matt’s rating: ${book.rating}/5">${'★'.repeat(book.rating)}${'☆'.repeat(5 - book.rating)}</span>` : ''}
+        <p class="detail-author">${esc(book.author)}${book.year ? ` · ${esc(book.year)}` : ''}</p>
+        <p class="detail-summary">${esc(book.summary)}</p>
+        ${book.why ? `<p class="detail-why">“${esc(book.why)}”</p>` : ''}
+        <div class="status-row">${statusButtons}</div>
+        <div class="buy-row">
+          <a class="buy amazon" href="${esc(amazonUrl(book))}" target="_blank" rel="noopener noreferrer">Amazon</a>
+          <a class="buy audible" href="${esc(audibleUrl(book))}" target="_blank" rel="noopener noreferrer">Audible</a>
+          <a class="buy goodreads" href="${esc(goodreadsUrl(book))}" target="_blank" rel="noopener noreferrer">Goodreads</a>
+        </div>
+      </div>
+    </div>`
+}
+
+let openDetailId = null
+
+function openDetail(id) {
+  const book = findShelfBook(id)
+  if (!book) return
+  openDetailId = id
+  $('detail-title').textContent = book.title
+  $('detail-body').innerHTML = detailBodyHtml(book)
+  $('detail-modal').hidden = false
+  const panel = $('detail-panel')
+  panel.classList.remove('opening')
+  void panel.offsetWidth // restart the animation each time
+  panel.classList.add('opening')
+}
+function closeDetail() { $('detail-modal').hidden = true; openDetailId = null }
+
+$('detail-close').addEventListener('click', closeDetail)
+$('detail-modal').addEventListener('click', (e) => { if (e.target === $('detail-modal')) closeDetail() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail() })
+
+$('shelf-view').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-id]')
+  if (btn) openDetail(btn.dataset.id)
+})
+
+$('detail-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]')
+  if (!btn || !openDetailId) return
+  const action = btn.dataset.action
+  if (action === 'start-reading') setStatusOverride(openDetailId, 'reading')
+  else if (action === 'mark-finished') setStatusOverride(openDetailId, 'read')
+  else if (action === 'back-to-tbr') setStatusOverride(openDetailId, 'to-read')
+  else if (action === 'back-to-reading') setStatusOverride(openDetailId, 'reading')
+})
+
+// ---------- view toggle (grid ⇄ shelf) ----------
+function applyViewMode() {
+  $('grid').hidden = viewMode === 'shelf'
+  $('shelf-view').hidden = viewMode !== 'shelf'
+  $('sort-select').hidden = viewMode === 'shelf'
+  $('view-toggle').textContent = viewMode === 'shelf' ? '▦ Grid view' : '🗄️ Shelf view'
+}
+
+$('view-toggle').addEventListener('click', () => {
+  viewMode = viewMode === 'shelf' ? 'grid' : 'shelf'
+  localStorage.setItem(VIEW_KEY, viewMode)
+  applyViewMode()
+  renderGenreOptions()
+  render()
+})
 
 // ---------- toolbar & settings ----------
 $('search-input').addEventListener('input', (e) => { query = e.target.value; render() })
@@ -435,5 +640,6 @@ $('step-form').addEventListener('submit', (e) => {
 })
 
 // ---------- boot ----------
+applyViewMode()
 renderGenreOptions()
 render()

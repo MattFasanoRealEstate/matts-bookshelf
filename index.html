@@ -19,6 +19,7 @@
         </p>
         <div class="hero-actions">
           <button class="primary" id="add-btn">📷 Add a book</button>
+          <button class="ghost" id="view-toggle">🗄️ Shelf view</button>
           <button class="ghost" id="import-btn">📚 Import Goodreads CSV</button>
           <button class="ghost" id="settings-btn">⚙︎ Affiliate settings</button>
           <button class="ghost" id="export-btn">⬇︎ Export library</button>
@@ -48,6 +49,21 @@
       </div>
       <p class="empty" id="empty-msg" hidden>No books match — try clearing the search or genre filter.</p>
       <div class="grid" id="grid"></div>
+
+      <div class="shelf-view" id="shelf-view" hidden>
+        <section class="shelf-zone shelf-reading">
+          <h2 class="shelf-zone-title">📖 Currently reading</h2>
+          <div class="shelf-reading-row" id="shelf-reading-row"></div>
+        </section>
+        <section class="shelf-zone shelf-case" id="shelf-case">
+          <h2 class="shelf-zone-title">The bookcase</h2>
+          <div id="shelf-case-rows"></div>
+        </section>
+        <section class="shelf-zone shelf-tbr">
+          <h2 class="shelf-zone-title">📚 To be read</h2>
+          <div class="shelf-row-books" id="shelf-tbr-row"></div>
+        </section>
+      </div>
     </main>
 
     <footer>
@@ -105,7 +121,18 @@
     </div>
   </div>
 
-  <script src="data.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <!-- Book detail / "open the cover" modal, used by Shelf View -->
+  <div class="modal-backdrop" id="detail-modal" hidden>
+    <div class="modal book-detail" id="detail-panel">
+      <div class="modal-head">
+        <h2 id="detail-title"></h2>
+        <button class="icon-btn" id="detail-close" aria-label="Close">✕</button>
+      </div>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+
+  <script src="data.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
