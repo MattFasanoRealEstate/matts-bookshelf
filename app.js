@@ -28,8 +28,10 @@ let tag = localStorage.getItem(TAG_KEY) ?? ''
 let viewMode = localStorage.getItem(VIEW_KEY) === 'shelf' ? 'shelf' : 'grid'
 let highlightId = null // book id to pop-in animate on the next shelf render
 
-const allBooks = () => [...customBooks, ...MY_BOOKS]
 const shelfPool = () => [...customBooks, ...MY_BOOKS, ...(typeof TO_READ_BOOKS !== 'undefined' ? TO_READ_BOOKS : [])]
+// Grid View shows read/reading books — including anything promoted out of To Be
+// Read via a Shelf View status override, and excluding anything sent back to it.
+const allBooks = () => shelfPool().filter((b) => bookStatus(b) !== 'to-read')
 
 // A book's shelf status: an explicit override always wins (set by the Shelf View
 // "start reading" / "mark finished" controls); otherwise it's derived from the data.
@@ -96,6 +98,11 @@ function allGenres() {
 
 function cardHtml(book) {
   const src = coverUrl(book)
+  const status = bookStatus(book)
+  const statusChip =
+    status === 'reading' ? '<span class="read-chip">📖 Reading now</span>'
+    : status === 'read' ? `<span class="read-chip">${book.yearRead ? `Read ${book.yearRead}` : 'Read'}</span>`
+    : ''
   return `
   <article class="card" data-id="${esc(book.id)}">
     <div class="card-cover${src ? '' : ' nocover'}">
@@ -108,7 +115,7 @@ function cardHtml(book) {
       <div class="card-meta">
         <span class="chip-group">
           <span class="genre-chip">${esc(book.genre)}</span>
-          ${book.reading ? '<span class="read-chip">📖 Reading now</span>' : book.yearRead ? `<span class="read-chip">Read ${book.yearRead}</span>` : ''}
+          ${statusChip}
         </span>
         ${book.rating ? `<span class="stars" title="Matt’s rating: ${book.rating}/5">${'★'.repeat(book.rating)}${'☆'.repeat(5 - book.rating)}</span>` : ''}
       </div>
@@ -126,14 +133,16 @@ function cardHtml(book) {
 }
 
 function renderGenreOptions() {
+  const genres = allGenres()
+  if (genreFilter && !genres.includes(genreFilter)) genreFilter = '' // e.g. a TBR-only genre after switching to Grid View
+
   const sel = $('genre-select')
-  const current = genreFilter
   sel.innerHTML =
     `<option value="">All genres</option>` +
-    allGenres().map((g) => `<option value="${esc(g)}"${g === current ? ' selected' : ''}>${esc(g)}</option>`).join('')
+    genres.map((g) => `<option value="${esc(g)}"${g === genreFilter ? ' selected' : ''}>${esc(g)}</option>`).join('')
 
   const fsel = $('f-genre')
-  fsel.innerHTML = allGenres().map((g) => `<option>${esc(g)}</option>`).join('')
+  fsel.innerHTML = genres.map((g) => `<option>${esc(g)}</option>`).join('')
 }
 
 function render() {
@@ -185,7 +194,9 @@ function renderShelf() {
       return `
       <button class="reading-book${cls}" data-id="${esc(b.id)}">
         <span class="reading-cover">
-          ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(b.title)}" loading="lazy" />` : ''}
+          ${src ? `<img src="${esc(src)}" alt="Cover of ${esc(b.title)}" loading="lazy"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />` : ''}
+          <span class="reading-cover-fallback" style="${src ? 'display:none' : 'display:flex'}">${esc(b.title)}</span>
         </span>
         <span class="reading-title">${esc(b.title)}</span>
         <span class="reading-author">${esc(b.author)}</span>
@@ -394,7 +405,7 @@ function importGoodreadsCsv(text) {
     iRating = col('my rating')
   if (iTitle === -1 || iAuthor === -1) throw new Error('Missing Title/Author columns — is this a Goodreads export?')
 
-  const existing = new Set(allBooks().map((b) => `${b.title}|${b.author}`.toLowerCase()))
+  const existing = new Set(shelfPool().map((b) => `${b.title}|${b.author}`.toLowerCase()))
   let added = 0, skipped = 0
   for (const r of rows.slice(1)) {
     const shelf = iShelf !== -1 ? r[iShelf]?.trim() : 'read'
@@ -583,7 +594,7 @@ async function runSearch(q) {
         ${r.coverId
           ? `<img src="https://covers.openlibrary.org/b/id/${r.coverId}-S.jpg" alt="" />`
           : '<span class="thumb-blank"></span>'}
-        <span><strong>${esc(r.title)}</strong><em>${esc(r.author)}${r.year ? ` · ${r.year}` : ''}</em></span>`
+        <span><strong>${esc(r.title)}</strong><em>${esc(r.author)}${r.year ? ` · ${esc(r.year)}` : ''}</em></span>`
       btn.addEventListener('click', () => pickResult(r))
       li.appendChild(btn)
       ul.appendChild(li)

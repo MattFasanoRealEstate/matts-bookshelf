@@ -220,5 +220,3 @@ const TO_READ_BOOKS = [
   { id: 'the-devils-joe-abercrombie', title: 'The Devils', author: 'Joe Abercrombie', genre: 'Fantasy', coverId: 15229572, toRead: true, summary: 'A ragtag crew of monsters — vampires, werewolves, and worse — is assembled to protect a fake princess on a deadly diplomatic mission.' },
   { id: 'the-strength-of-the-few-james-islington', title: 'The Strength of the Few', author: 'James Islington', genre: 'Fantasy', coverId: 15150800, toRead: true, summary: 'Book two of the Hierarchy series raises the stakes of Vis’s double life inside the empire’s brutal power structure.' },
 ]
-
-const GENRES = [...new Set([...MY_BOOKS, ...TO_READ_BOOKS].map((b) => b.genre))].sort()
